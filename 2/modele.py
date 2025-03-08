@@ -1,9 +1,11 @@
 import torch
 import numpy as np
+from torch.utils.data import Dataset
+from torch.nn import Module
 
 
 # Définition du modèle de réseau de neurones
-class MatrixNN(torch.nn.Module):
+class MatrixNN(Module):
     def __init__(self, input_dim, output_dim):
         super(MatrixNN, self).__init__()
         self.fc1 = torch.nn.Linear(input_dim, 32)
@@ -46,6 +48,7 @@ def load_data_from_npz(file_path):
     
     for matrix in matrices_3d:
         if matrix.ndim != 2:
+            print("Warning: Invalid dim for a matrix in the 3d matrix.")
             continue
         
         matrix = matrix.astype(np.float32)

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from modele import MatrixNN, MatrixDataset, load_data_from_npz
 
 if __name__ == "__main__":
@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     # Dimension des matrices (aplanissement des matrices 2D)
     n_samples = x_train.shape[0]
-    input_dim = x_train.shape[1] * x_train.shape[2]  # Aplatir chaque matrice
+    input_dim = x_train.shape[1] * x_train.shape[2]
     output_dim = y_train.shape[1]  # La dimension du vecteur de sortie
 
     # Aplatir les matrices 2D en vecteurs 1D
