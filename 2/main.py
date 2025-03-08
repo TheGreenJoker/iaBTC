@@ -4,20 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from modele import MatrixNN, load_data_from_npz
-
-
-# Dataset personnalisé pour charger les matrices
-class MatrixDataset(Dataset):
-    def __init__(self, matrices, targets):
-        self.matrices = matrices
-        self.targets = targets
-
-    def __len__(self):
-        return len(self.matrices)
-
-    def __getitem__(self, idx):
-        return torch.tensor(self.matrices[idx], dtype=torch.float32), torch.tensor(self.targets[idx], dtype=torch.float32)
+from modele import MatrixNN, MatrixDataset, load_data_from_npz
 
 if __name__ == "__main__":
     # Charger les données depuis "npy.tmp/matrix.npy"

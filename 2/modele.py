@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 
+
 # Définition du modèle de réseau de neurones
 class MatrixNN(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -18,6 +19,19 @@ class MatrixNN(torch.nn.Module):
         x = torch.relu(self.fc4(x))
         x = self.fc5(x)
         return x
+
+
+# Dataset personnalisé pour charger les matrices
+class MatrixDataset(Dataset):
+    def __init__(self, matrices, targets):
+        self.matrices = matrices
+        self.targets = targets
+
+    def __len__(self):
+        return len(self.matrices)
+
+    def __getitem__(self, idx):
+        return torch.tensor(self.matrices[idx], dtype=torch.float32), torch.tensor(self.targets[idx], dtype=torch.float32)
 
 
 # Fonction pour charger les données depuis "npy.tmp/matrix.npy"
