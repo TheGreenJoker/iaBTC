@@ -2,60 +2,49 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from torch.nn import Module
-
+from random import randint
 
 # Définition du modèle de réseau de neurones
-class MatrixNN(Module):
+class ModeleLSTMnn(Module):
     def __init__(self, input_dim, output_dim):
-        super(MatrixNN, self).__init__()
+        super(ModeleLSTMnn, self).__init__()
         self.fc1 = torch.nn.Linear(input_dim, 32)
-        self.fc2 = torch.nn.Linear(32, 128)
+        self.lstm2 = torch.nn.LSTM(32, 128, batch_first=True)
         self.fc3 = torch.nn.Linear(128, 64)
-        self.fc4 = torch.nn.Linear(64, 32)
+        self.lstm4 = torch.nn.LSTM(64, 32, batch_first=True)
         self.fc5 = torch.nn.Linear(32, output_dim)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        x = torch.relu(self.fc4(x))
-        x = self.fc5(x)
+        x = torch.relu(self.fc1(x))  # (batch, seq_len, 32)
+        x, _ = self.lstm2(x)         # (batch, seq_len, 128)
+        x = torch.relu(self.fc3(x))  # (batch, seq_len, 64)
+        x, _ = self.lstm4(x)         # (batch, seq_len, 32)
+        x = self.fc5(x)              # (batch, seq_len, output_dim)
         return x
 
-
-# Dataset personnalisé pour charger les matrices
-class MatrixDataset(Dataset):
-    def __init__(self, matrices, targets):
-        self.matrices = matrices
-        self.targets = targets
-
-    def __len__(self):
-        return len(self.matrices)
-
-    def __getitem__(self, idx):
-        return torch.tensor(self.matrices[idx], dtype=torch.float32), torch.tensor(self.targets[idx], dtype=torch.float32)
-
-
-# Fonction pour charger les données depuis "npy.tmp/matrix.npy"
-def load_data_from_npz(file_path):
-    matrices_3d = np.load(file_path)
-
-    matrices = []
-    targets = []
-    
-    if matrices_3d.ndim != 3:
-        raise ValueError("Le fichier doit contenir une matrice 3D.")
-    
-    for matrix in matrices_3d:
-        if matrix.ndim != 2:
-            print("Warning: Invalid dim for a matrix in the 3d matrix.")
-            continue
+    def reset_memory(self, batch_size, device):
+        """ Réinitialiser la mémoire du modèle LSTM """
+        # Réinitialiser h_0 et c_0 à zéro pour chaque LSTM
+        self.h_0_lstm2 = torch.zeros(1, batch_size, self.lstm2.hidden_size).to(device)  # (num_layers, batch_size, hidden_size)
+        self.c_0_lstm2 = torch.zeros(1, batch_size, self.lstm2.hidden_size).to(device)  # (num_layers, batch_size, hidden_size)
         
-        matrix = matrix.astype(np.float32)
-        target = matrix[-1, :]
-        matrix_without_last_row = matrix[:-1, :]
+        self.h_0_lstm4 = torch.zeros(1, batch_size, self.lstm4.hidden_size).to(device)  # (num_layers, batch_size, hidden_size)
+        self.c_0_lstm4 = torch.zeros(1, batch_size, self.lstm4.hidden_size).to(device)  # (num_layers, batch_size, hidden_size)
         
-        matrices.append(matrix_without_last_row)
-        targets.append(target)
+        return (self.h_0_lstm2, self.c_0_lstm2), (self.h_0_lstm4, self.c_0_lstm4)
+
+def get_lines(file:str, line_cout:int, line0:int=False):
+    matrix = np.load(file)
+    totalT = len(matrix)
+
+    line0 = line0 if (not line0) or (line0 == "random") else randint(0, len(matrix)-line_cout-1)
+
+    if len(matrix) < (line0 + line_cout):
+        print(f"[Warning] line0+line_count > matrix size => {line0 + line_cout}>{len(matrix)}, using random line0")
+        line0 = randint(0, len(matrix)-line_cout-1) 
+    inputValue = []
+    for i in range(line_cout):
+        inputValue.append(matrix[line0+i])
+        outputValue = matrix[line0+i+1]
     
-    return np.array(matrices), np.array(targets)
+    return np.array(inputValue), np.array(outputValue)

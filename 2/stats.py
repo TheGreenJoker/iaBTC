@@ -1,62 +1,80 @@
-import torch
-import matplotlib.pyplot as plt
 from os import system
-from modele import MatrixNN, load_data_from_npz
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
 
-if __name__ == "__main__":
-    # Charger la matrice de test
-    system("tree npy.tmp/")
-    file_path = f"npy.tmp/{input('FileName: ')}"
-    x_test, y_test = load_data_from_npz(file_path)
+# Définition du modèle LSTM (doit être identique à celui utilisé lors de l'entraînement)
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers):
+        super(LSTMModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, 1)
+        
+    def forward(self, x, hidden_state=None):
+        # x : [batch_size, seq_length, input_size]
+        out, (h_n, c_n) = self.lstm(x, hidden_state)
+        # On ne retient que la dernière sortie de la séquence
+        out = self.fc(out[:, -1, :])
+        return out, (h_n, c_n)
 
-    # Applatissement des matrices de test
-    n_samples = x_test.shape[0]
-    input_dim = x_test.shape[1] * x_test.shape[2]
-    x_test = x_test.reshape(n_samples, -1)
+# Configuration de l'appareil de calcul
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Charger le modèle sauvegardé
-    model = MatrixNN(input_dim, y_test.shape[1])
-    system("tree modeles/")
-    model.load_state_dict(torch.load(f"modeles/{input('FileName: ')}"))
-    model.eval()
+# Chargement du modèle sauvegardé
+system("tree modeles/")
+model_path = f"modeles/{input('File: ')}"
+model = torch.load(model_path, map_location=device)
+model.to(device)
+model.eval()
 
-    # Effectuer des prédictions
-    predictions = model(torch.tensor(x_test, dtype=torch.float32))
+# Chargement des données de validation (fichier NumPy)
+system("tree npy.tmp/")
+val_filename = f"npy.tmp/{input('File: ')}"
+validation_data = np.load(val_filename)
+cutyn = input("Cut: ")
+if cutyn:
+    validation_data = validation_data[:int(cutyn)]
 
-    # Calculer l'erreur en pour mille pour chaque échantillon
-    absolute_error = torch.abs(predictions - torch.tensor(y_test, dtype=torch.float32))
-    relative_error = absolute_error / torch.abs(torch.tensor(y_test, dtype=torch.float32))
+# Choix de la taille de la fenêtre (delta_t) pour les séquences d'entrée
+delta_t = int(input("Entrer le delta_t (ex: 10): "))
 
-    # Calculer l'erreur en pour mille
-    error_per_mille = relative_error * 1000  # En milles
+# Préparation des entrées et cibles à partir des données de validation
+inputs = []
+targets = []
+N = validation_data.shape[0]
 
-    # Calculer la moyenne de l'erreur en pour mille
-    mean_error_per_mille = torch.mean(error_per_mille)
+for i in range(N - delta_t):
+    # La séquence d'entrée est une tranche de delta_t observations
+    seq_input = validation_data[i:i+delta_t]
+    # La cible est la valeur (par exemple, la première feature) suivant la séquence
+    seq_target = validation_data[i + delta_t, 0]
+    inputs.append(torch.tensor(seq_input, dtype=torch.float32))
+    targets.append(seq_target)
 
-    # Calcul de l'erreur de signe (vérifier les signes)
-    sign_error = torch.sign(predictions) != torch.sign(torch.tensor(y_test, dtype=torch.float32))
-    
-    # Calcul de la proportion d'erreur de signe en pour mille
-    sign_error_per_mille = torch.mean(sign_error.float()) * 1000  # On le multiplie par 1000 pour obtenir en pour mille
+inputs = torch.stack(inputs).to(device)
 
-    print(f"Erreur moyenne en pour mille sur le jeu de test : {mean_error_per_mille.item():.4f}")
-    print(f"Proportion d'erreur de signe en pour mille sur le jeu de test : {sign_error_per_mille.item():.4f}")
+# Si les données ont une dimension supplémentaire (ex: [num_samples, delta_t, 1, features]),
+# on la retire pour obtenir la forme attendue par le LSTM: [batch, seq_length, features].
+if inputs.dim() == 4:
+    inputs = inputs.squeeze(2)
 
-    # Tracer les courbes des valeurs réelles vs. prédites
-    plt.figure(figsize=(10, 6))
+targets = np.array(targets)
 
-    # Tracer les valeurs réelles
-    plt.plot(y_test[:10, :], label="Valeurs réelles", marker='o', linestyle='-', color='b')
+# Passage en mode évaluation (aucune rétropropagation)
+with torch.no_grad():
+    predictions, _ = model(inputs)
+    predictions = predictions.cpu().numpy().flatten()
 
-    # Tracer les valeurs prédites
-    plt.plot(predictions[:10, :].detach().numpy(), label="Valeurs prédites", marker='x', linestyle='--', color='r')
-
-    plt.xlabel('Index des échantillons')
-    plt.ylabel('Valeurs')
-    plt.title('Comparaison des valeurs réelles et des valeurs prédites')
-
-    # Ajouter la légende
-    plt.legend()
-
-    # Afficher la courbe
-    plt.show()
+# Tracé des courbes de prédictions et de valeurs réelles
+plt.figure(figsize=(12, 6))
+plt.plot(predictions, label="Prédictions", marker='o')
+plt.plot(targets, label="Valeurs réelles", marker='x')
+plt.title("Comparaison des Prédictions et des Valeurs Réelles")
+plt.xlabel("Index")
+plt.ylabel("Valeur")
+plt.legend()
+plt.show()
